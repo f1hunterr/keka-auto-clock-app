@@ -65,11 +65,20 @@ public final class SettingsStore {
     }
 
     public static String clickScript(String mode) {
-        String text = mode.equals("in") ? "Clock-in" : "Clock-out";
+        String text = mode.equals("in") ? "clock-in" : "clock-out";
+        // Keka renders these two states with DIFFERENT element types AND
+        // inconsistent capitalization: clock-out is a real
+        // <button class="btn btn-danger">"Web Clock-out"</button>, clock-in
+        // is an <a class="text-link">"Web Clock-In"</a> (capital I) styled
+        // like the other action list items. Match either tag, case-insensitive.
         return "(() => { "
                 + "const c = document.querySelector('employee-attendance-request-actions'); "
-                + "const b = c && c.querySelector('button'); "
-                + "if (b && b.innerText.includes('" + text + "')) { b.click(); return 'done'; } "
+                + "if (!c) return 'no-container'; "
+                + "const els = c.querySelectorAll('button, a'); "
+                + "for (const el of els) { "
+                + "  const t = (el.innerText || '').toLowerCase(); "
+                + "  if (t.includes('" + text + "')) { el.click(); return 'done'; } "
+                + "} "
                 + "return 'no-op'; })()";
     }
 }
