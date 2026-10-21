@@ -4,65 +4,144 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.View;
+import android.os.PowerManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.google.android.gms.location.Geofence;
-import com.google.android.gms.location.GeofencingClient;
-import com.google.android.gms.location.GeofencingRequest;
-import com.google.android.gms.location.LocationServices;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends Activity {
 
-    private static final String TAG = "KekaAutoClock";
     private static final String CHANNEL_ID = "keka_auto_clock";
     private static final int REQ_LOCATION = 1001;
     private static final int REQ_BACKGROUND_LOCATION = 1002;
-    private static final int REQ_NOTIFICATIONS = 1003;
+
+    private TextView statusText;
+    private SettingsStore settings;
+    private EventLog eventLog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        settings = new SettingsStore(this);
+        eventLog = new EventLog(this);
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(40, 80, 40, 40);
+        layout.setPadding(40, 60, 40, 40);
 
-        TextView tv = new TextView(this);
-        tv.setTextSize(16);
-        tv.setText("Keka Auto Clock\n\n"
-                + "Geofence armed around the office.\n"
-                + "Clock-in fires on arrival (any time).\n"
-                + "Clock-out fires on departure, 18:00-23:59 only.\n\n"
-                + "First time setup: tap below and log into Keka once.\n"
-                + "After that you can close this screen — it runs in the background.");
-        layout.addView(tv);
+        TextView title = new TextView(this);
+        title.setTextSize(20);
+        title.setText("Keka Auto Clock");
+        layout.addView(title);
+
+        statusText = new TextView(this);
+        statusText.setTextSize(14);
+        statusText.setPadding(0, 20, 0, 20);
+        layout.addView(statusText);
 
         Button loginButton = new Button(this);
         loginButton.setText("Login to Keka");
         loginButton.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         layout.addView(loginButton);
 
-        setContentView(layout);
+        Button testInButton = new Button(this);
+        testInButton.setText("Test Clock-In Now");
+        testInButton.setOnClickListener(v -> runManualTest("in"));
+        layout.addView(testInButton);
+
+        Button testOutButton = new Button(this);
+        testOutButton.setText("Test Clock-Out Now");
+        testOutButton.setOnClickListener(v -> runManualTest("out"));
+        layout.addView(testOutButton);
+
+        Button settingsButton = new Button(this);
+        settingsButton.setText("Settings (location, times)");
+        settingsButton.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        layout.addView(settingsButton);
+
+        Button logButton = new Button(this);
+        logButton.setText("View Event Log");
+        logButton.setOnClickListener(v -> startActivity(new Intent(this, LogViewerActivity.class)));
+        layout.addView(logButton);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.addView(layout);
+        setContentView(scrollView);
 
         createNotificationChannel();
         requestPermissionsThenRegisterGeofences();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshStatus(); // picks up changes made in Settings or by background triggers
+    }
+
+    private void runManualTest(String mode) {
+        eventLog.log("Manual test triggered: " + mode);
+        Intent intent = new Intent(this, ClockActionActivity.class);
+        intent.putExtra(ClockActionActivity.EXTRA_MODE, mode);
+        startActivity(intent);
+        Toast.makeText(this, "Running test " + mode + " - watch for the notification", Toast.LENGTH_SHORT).show();
+    }
+
+    private void refreshStatus() {
+        StringBuilder sb = new StringBuilder();
+
+        boolean locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+        boolean backgroundLocationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+        boolean notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED;
+        boolean batteryUnrestricted = isIgnoringBatteryOptimizations();
+
+        sb.append("PERMISSIONS\n");
+        sb.append(dot(locationGranted)).append(" Location access\n");
+        sb.append(dot(backgroundLocationGranted)).append(" Background location (\"Allow all the time\")\n");
+        sb.append(dot(notificationsGranted)).append(" Notifications\n");
+        sb.append(dot(batteryUnrestricted)).append(" Battery unrestricted");
+        if (!batteryUnrestricted) {
+            sb.append(" <- set this in phone Settings > Battery, or trigger will stop silently");
+        }
+        sb.append("\n\n");
+
+        sb.append("GEOFENCE\n");
+        sb.append(dot(settings.isGeofenceArmed())).append(" Armed\n");
+        sb.append(String.format("Lat %.6f, Lng %.6f, radius %.0fm\n",
+                settings.getLat(), settings.getLng(), settings.getRadius()));
+        sb.append(String.format("Clock-out window: %02d:00 - %02d:00\n\n",
+                settings.getClockoutStartHour(), settings.getClockoutEndHour()));
+
+        sb.append("LAST EVENT\n");
+        sb.append(settings.getLastEvent());
+
+        statusText.setText(sb.toString());
+    }
+
+    private String dot(boolean ok) {
+        return ok ? "[OK]" : "[!!]";
+    }
+
+    private boolean isIgnoringBatteryOptimizations() {
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
     }
 
     private void createNotificationChannel() {
@@ -88,7 +167,7 @@ public class MainActivity extends Activity {
 
         if (!missing.isEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toArray(new String[0]), REQ_LOCATION);
-            return; // background location + geofence registration happens after this returns
+            return;
         }
         requestBackgroundLocationIfNeeded();
     }
@@ -105,7 +184,7 @@ public class MainActivity extends Activity {
                     REQ_BACKGROUND_LOCATION);
             return;
         }
-        registerGeofences();
+        new GeofenceManager(this).register(this::refreshStatus);
     }
 
     @Override
@@ -114,48 +193,9 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_LOCATION) {
             requestBackgroundLocationIfNeeded();
         } else if (requestCode == REQ_BACKGROUND_LOCATION) {
-            registerGeofences();
+            new GeofenceManager(this).register(this::refreshStatus);
         }
-    }
-
-    private void registerGeofences() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Location permission missing - cannot arm geofence", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        Geofence officeGeofence = new Geofence.Builder()
-                .setRequestId(Config.GEOFENCE_ID_OFFICE)
-                .setCircularRegion(Config.OFFICE_LAT, Config.OFFICE_LNG, Config.OFFICE_RADIUS_M)
-                .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
-                .setLoiteringDelay(30000) // 30s dwell before counting as a real enter, avoids GPS jitter
-                .build();
-
-        GeofencingRequest request = new GeofencingRequest.Builder()
-                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-                .addGeofence(officeGeofence)
-                .build();
-
-        Intent intent = new Intent(this, GeofenceBroadcastReceiver.class);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                this, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
-
-        GeofencingClient client = LocationServices.getGeofencingClient(this);
-        try {
-            client.addGeofences(request, pendingIntent)
-                    .addOnSuccessListener(unused -> {
-                        Log.i(TAG, "Geofence armed");
-                        Toast.makeText(this, "Geofence armed around office", Toast.LENGTH_SHORT).show();
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Failed to arm geofence", e);
-                        Toast.makeText(this, "Failed to arm geofence: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
-        } catch (SecurityException e) {
-            Log.e(TAG, "Missing permission for geofencing", e);
-        }
+        refreshStatus();
     }
 }
+

@@ -20,10 +20,15 @@ public class ClockActionActivity extends Activity {
     private static final String CHANNEL_ID = "keka_auto_clock";
 
     private WebView webView;
+    private EventLog eventLog;
+    private SettingsStore settings;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        eventLog = new EventLog(this);
+        settings = new SettingsStore(this);
 
         String mode = getIntent().getStringExtra(EXTRA_MODE);
         if (mode == null) mode = "in";
@@ -41,19 +46,22 @@ public class ClockActionActivity extends Activity {
                 // Give the Angular SPA a moment to mount the attendance button,
                 // then run the click script and report the result back via JsBridge.
                 new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    String wrapped = "window.AndroidBridge.onResult((" + Config.clickScript(finalMode) + "))";
+                    String wrapped = "window.AndroidBridge.onResult((" + SettingsStore.clickScript(finalMode) + "))";
                     view.evaluateJavascript(wrapped, null);
                 }, 3000);
             }
         });
 
         setContentView(webView);
-        webView.loadUrl(Config.KEKA_URL);
+        webView.loadUrl(SettingsStore.KEKA_URL);
 
         // Safety timeout: if nothing reports back within 20s (e.g. page never loaded,
         // no network), finish anyway so the invisible activity doesn't linger.
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            showNotification("Keka " + finalMode + ": timed out waiting for page");
+            String msg = "Keka " + finalMode + ": timed out waiting for page";
+            showNotification(msg);
+            eventLog.log(msg);
+            settings.setLastEvent(msg);
             finish();
         }, 20000);
     }
@@ -66,7 +74,10 @@ public class ClockActionActivity extends Activity {
         public void onResult(String result) {
             runOnUiThread(() -> {
                 String label = mode.equals("in") ? "Clock-in" : "Clock-out";
-                showNotification(label + ": " + result);
+                String msg = label + ": " + result;
+                showNotification(msg);
+                eventLog.log(msg);
+                settings.setLastEvent(msg);
                 finish();
             });
         }

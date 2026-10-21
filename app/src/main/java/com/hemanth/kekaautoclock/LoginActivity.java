@@ -34,7 +34,7 @@ public class LoginActivity extends Activity {
         });
 
         setContentView(webView);
-        webView.loadUrl(Config.KEKA_URL);
+        webView.loadUrl(SettingsStore.KEKA_URL);
     }
 
     @Override

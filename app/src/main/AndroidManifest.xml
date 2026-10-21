@@ -29,6 +29,14 @@
             android:name=".LoginActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".LogViewerActivity"
+            android:exported="false" />
+
         <!-- Invisible activity that hosts the WebView and runs the click script.
              Translucent + no history so it never shows a visible UI to the user,
              just flashes through to run the JS and finish. -->

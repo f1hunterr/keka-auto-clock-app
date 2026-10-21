@@ -18,25 +18,33 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         GeofencingEvent event = GeofencingEvent.fromIntent(intent);
+        EventLog eventLog = new EventLog(context);
+
         if (event == null || event.hasError()) {
-            Log.e(TAG, "Geofencing event error: " + (event != null ? event.getErrorCode() : "null event"));
+            String err = "Geofencing event error: " + (event != null ? event.getErrorCode() : "null event");
+            Log.e(TAG, err);
+            eventLog.log(err);
             return;
         }
 
         int transition = event.getGeofenceTransition();
+        SettingsStore settings = new SettingsStore(context);
 
         if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) {
             Log.i(TAG, "Entered office geofence -> clock-in");
+            eventLog.log("Geofence ENTER -> clock-in triggered");
             launchClockAction(context, "in");
 
         } else if (transition == Geofence.GEOFENCE_TRANSITION_EXIT) {
             Calendar now = Calendar.getInstance();
             int hour = now.get(Calendar.HOUR_OF_DAY);
-            if (hour >= Config.CLOCKOUT_START_HOUR && hour < Config.CLOCKOUT_END_HOUR) {
+            if (hour >= settings.getClockoutStartHour() && hour < settings.getClockoutEndHour()) {
                 Log.i(TAG, "Exited office geofence within clock-out window -> clock-out");
+                eventLog.log("Geofence EXIT at hour=" + hour + " (within window) -> clock-out triggered");
                 launchClockAction(context, "out");
             } else {
                 Log.i(TAG, "Exited office geofence outside clock-out window (hour=" + hour + ") -> ignored");
+                eventLog.log("Geofence EXIT at hour=" + hour + " (outside window) -> ignored");
             }
         }
     }
