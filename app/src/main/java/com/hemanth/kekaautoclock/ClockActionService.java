@@ -29,9 +29,11 @@ public class ClockActionService extends Service {
     public static final String EXTRA_MODE = "mode"; // "in" or "out"
     private static final String CHANNEL_ID = "keka_auto_clock";
     private static final int FOREGROUND_NOTIFICATION_ID = 9001;
-    private static final int MAX_RETRIES = 2;
-    private static final long RETRY_DELAY_MS = 5000;
-    private static final long SAFETY_TIMEOUT_MS = 45000;
+    private static final int MAX_RETRIES = 1; // the click script itself polls for up to 15s now,
+                                                // so a full page-reload retry is just an outer
+                                                // safety net for a genuinely broken/stalled load
+    private static final long RETRY_DELAY_MS = 3000;
+    private static final long SAFETY_TIMEOUT_MS = 60000;
 
     private WebView webView;
     private EventLog eventLog;
@@ -75,6 +77,13 @@ public class ClockActionService extends Service {
         webView.getSettings().setDomStorageEnabled(true); // needed to keep the login session
         webView.addJavascriptInterface(new JsBridge(), "AndroidBridge");
 
+        // Lets us inspect this exact WebView live via chrome://inspect over USB -
+        // needed to actually see the rendered DOM (incl. any Shadow DOM) instead
+        // of guessing why a selector isn't matching.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
+
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
@@ -83,12 +92,10 @@ public class ClockActionService extends Service {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    if (finished) return;
-                    String wrapped = "window.AndroidBridge.onResult((" + SettingsStore.clickScript(mode)
-                            + "), document.title, '" + url.replace("'", "") + "')";
-                    view.evaluateJavascript(wrapped, null);
-                }, 3000);
+                if (finished) return;
+                // The script self-polls for up to 15s and calls AndroidBridge.onResult()
+                // itself once it resolves - no fixed Java-side delay needed anymore.
+                view.evaluateJavascript(SettingsStore.clickScript(mode), null);
             }
         });
 
@@ -100,7 +107,7 @@ public class ClockActionService extends Service {
         public void onResult(String result, String pageTitle, String pageUrl) {
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (finished) return;
-                boolean isFailure = "no-container".equals(result) || "no-op".equals(result);
+                boolean isFailure = result.startsWith("no-container") || result.startsWith("no-op");
                 if (isFailure && retriesLeft > 0) {
                     retriesLeft--;
                     String retryMsg = (mode.equals("in") ? "Clock-in" : "Clock-out") + ": " + result
@@ -113,7 +120,7 @@ public class ClockActionService extends Service {
                 }
 
                 String detail = result;
-                if ("no-container".equals(result)) {
+                if (result.startsWith("no-container")) {
                     detail += " (page title='" + pageTitle + "', url=" + pageUrl + ")";
                 }
                 finishWithResult(detail);

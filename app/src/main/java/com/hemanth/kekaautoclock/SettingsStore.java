@@ -71,14 +71,39 @@ public final class SettingsStore {
         // <button class="btn btn-danger">"Web Clock-out"</button>, clock-in
         // is an <a class="text-link">"Web Clock-In"</a> (capital I) styled
         // like the other action list items. Match either tag, case-insensitive.
-        return "(() => { "
-                + "const c = document.querySelector('employee-attendance-request-actions'); "
-                + "if (!c) return 'no-container'; "
-                + "const els = c.querySelectorAll('button, a'); "
-                + "for (const el of els) { "
-                + "  const t = (el.innerText || '').toLowerCase(); "
-                + "  if (t.includes('" + text + "')) { el.click(); return 'done'; } "
-                + "} "
-                + "return 'no-op'; })()";
+        //
+        // Self-polling instead of a single fixed delay: confirmed via real-device
+        // testing that the page's hydration time varies run-to-run (worked at
+        // ~13s one run, failed at 6s and even 11s another) - a fixed wait either
+        // wastes time or isn't long enough. This polls every 500ms for up to 15s
+        // and resolves (via the JS bridge directly) the instant it's ready,
+        // instead of Java guessing a delay and reloading the whole page to retry.
+        return "(function() { "
+                + "const text = '" + text + "'; "
+                + "const tryIn = (root) => { "
+                + "  const els = root.querySelectorAll('button, a'); "
+                + "  for (const el of els) { "
+                + "    const t = (el.innerText || '').toLowerCase(); "
+                + "    if (t.includes(text)) { el.click(); return true; } "
+                + "  } "
+                + "  return false; "
+                + "}; "
+                + "let attempts = 0; "
+                + "const maxAttempts = 30; " // 30 * 500ms = 15s poll window
+                + "const poll = () => { "
+                + "  attempts++; "
+                + "  const c = document.querySelector('employee-attendance-request-actions'); "
+                + "  if (c && tryIn(c)) { window.AndroidBridge.onResult('done', document.title, location.href); return; } "
+                + "  if (tryIn(document.body)) { window.AndroidBridge.onResult('done (fallback search)', document.title, location.href); return; } "
+                + "  if (attempts >= maxAttempts) { "
+                + "    const shadowCount = Array.from(document.querySelectorAll('*')).filter(el => el.shadowRoot).length; "
+                + "    const diag = ' [diag: shadowRootElements=' + shadowCount + ', containerFound=' + !!c + ', attempts=' + attempts + ']'; "
+                + "    window.AndroidBridge.onResult((c ? 'no-op' : 'no-container') + diag, document.title, location.href); "
+                + "    return; "
+                + "  } "
+                + "  setTimeout(poll, 500); "
+                + "}; "
+                + "poll(); "
+                + "})()";
     }
 }
