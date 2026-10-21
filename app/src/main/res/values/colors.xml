@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="keka_purple">#5746AF</color>
-    <color name="keka_purple_dark">#3A2E7A</color>
-    <color name="bg_dark">#0F1115</color>
-    <color name="card_bg">#1C1F26</color>
-    <color name="text_primary">#E2E8EB</color>
-    <color name="text_secondary">#8DB1BF</color>
-    <color name="status_ok">#4CAF50</color>
-    <color name="status_warn">#F44336</color>
+    <!-- Magic UI inspired: near-black background, purple -> pink gradient accent -->
+    <color name="accent_start">#9E7AFF</color>
+    <color name="accent_end">#FE8BBB</color>
+    <color name="bg_dark">#020817</color>
+    <color name="card_bg">#0F1420</color>
+    <color name="text_primary">#E5E7EB</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="status_ok">#4ADE80</color>
+    <color name="status_warn">#FB7185</color>
 </resources>

@@ -111,7 +111,10 @@ public class MainActivity extends Activity {
         MaterialButton button = new MaterialButton(this);
         button.setText(text);
         button.setAllCaps(false);
-        button.setCornerRadius(dp(12));
+        button.setCornerRadius(dp(14));
+        button.setBackgroundResource(R.drawable.button_gradient);
+        button.setBackgroundTintList(null); // null out Material's auto-tint so the gradient actually shows
+        button.setTextColor(0xFFFFFFFF);
         button.setOnClickListener(listener);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);

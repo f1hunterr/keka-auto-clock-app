@@ -66,7 +66,10 @@ public class SettingsActivity extends Activity {
         MaterialButton saveButton = new MaterialButton(this);
         saveButton.setText("Save and re-arm geofence");
         saveButton.setAllCaps(false);
-        saveButton.setCornerRadius(dp(12));
+        saveButton.setCornerRadius(dp(14));
+        saveButton.setBackgroundResource(R.drawable.button_gradient);
+        saveButton.setBackgroundTintList(null);
+        saveButton.setTextColor(0xFFFFFFFF);
         saveButton.setOnClickListener(v -> {
             try {
                 double lat = Double.parseDouble(latField.getText().toString().trim());
