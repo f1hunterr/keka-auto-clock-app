@@ -5,15 +5,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
+
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
 
 import java.util.Calendar;
+import java.util.concurrent.TimeUnit;
 
 /** Fired by Play Services whenever the office geofence transitions. */
 public class GeofenceBroadcastReceiver extends BroadcastReceiver {
 
     private static final String TAG = "KekaAutoClock";
+    private static final int CONFIRM_DELAY_SECONDS = 60;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -31,9 +36,13 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
         SettingsStore settings = new SettingsStore(context);
 
         if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) {
-            Log.i(TAG, "Entered office geofence -> clock-in");
-            eventLog.log("Geofence ENTER -> clock-in triggered");
-            launchClockAction(context, "in");
+            Log.i(TAG, "Entered office geofence -> confirming in " + CONFIRM_DELAY_SECONDS + "s before clock-in");
+            eventLog.log("Geofence ENTER -> waiting " + CONFIRM_DELAY_SECONDS
+                    + "s to confirm you're actually staying, before clock-in");
+            OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(ConfirmEntryWorker.class)
+                    .setInitialDelay(CONFIRM_DELAY_SECONDS, TimeUnit.SECONDS)
+                    .build();
+            WorkManager.getInstance(context).enqueue(request);
 
         } else if (transition == Geofence.GEOFENCE_TRANSITION_EXIT) {
             Calendar now = Calendar.getInstance();

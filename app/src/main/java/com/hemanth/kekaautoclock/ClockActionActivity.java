@@ -19,10 +19,15 @@ public class ClockActionActivity extends Activity {
 
     public static final String EXTRA_MODE = "mode"; // "in" or "out"
     private static final String CHANNEL_ID = "keka_auto_clock";
+    private static final int MAX_RETRIES = 2;
+    private static final long RETRY_DELAY_MS = 5000;
+    private static final long SAFETY_TIMEOUT_MS = 45000; // covers up to MAX_RETRIES retries
 
     private WebView webView;
     private EventLog eventLog;
     private SettingsStore settings;
+    private int retriesLeft = MAX_RETRIES;
+    private boolean finished = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,15 +66,17 @@ public class ClockActionActivity extends Activity {
         setContentView(webView);
         webView.loadUrl(SettingsStore.KEKA_URL);
 
-        // Safety timeout: if nothing reports back within 20s (e.g. page never loaded,
-        // no network), finish anyway so the invisible activity doesn't linger.
+        // Safety timeout: if nothing reports back within SAFETY_TIMEOUT_MS (e.g. page never
+        // loaded, no network), finish anyway so the invisible activity doesn't linger.
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (finished) return;
             String msg = "Keka " + finalMode + ": timed out waiting for page";
             showNotification(msg);
             eventLog.log(msg);
             settings.setLastEvent(msg);
+            finished = true;
             finish();
-        }, 20000);
+        }, SAFETY_TIMEOUT_MS);
     }
 
     private class JsBridge {
@@ -79,6 +86,19 @@ public class ClockActionActivity extends Activity {
         @JavascriptInterface
         public void onResult(String result, String pageTitle, String pageUrl) {
             runOnUiThread(() -> {
+                if (finished) return;
+                boolean isFailure = "no-container".equals(result) || "no-op".equals(result);
+                if (isFailure && retriesLeft > 0) {
+                    retriesLeft--;
+                    String retryMsg = (mode.equals("in") ? "Clock-in" : "Clock-out") + ": " + result
+                            + " - retrying in " + (RETRY_DELAY_MS / 1000) + "s (" + retriesLeft + " left)";
+                    eventLog.log(retryMsg);
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        if (!finished) webView.loadUrl(SettingsStore.KEKA_URL);
+                    }, RETRY_DELAY_MS);
+                    return;
+                }
+
                 String label = mode.equals("in") ? "Clock-in" : "Clock-out";
                 String msg = label + ": " + result;
                 if ("no-container".equals(result)) {
@@ -90,6 +110,7 @@ public class ClockActionActivity extends Activity {
                 showNotification(msg);
                 eventLog.log(msg);
                 settings.setLastEvent(msg);
+                finished = true;
                 finish();
             });
         }

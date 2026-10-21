@@ -7,9 +7,11 @@ import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.provider.Settings;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
@@ -88,7 +90,11 @@ public class MainActivity extends Activity {
         addButton(actionsCard, "Settings",
                 v -> startActivity(new Intent(this, SettingsActivity.class)), dp8);
         addButton(actionsCard, "View Event Log",
-                v -> startActivity(new Intent(this, LogViewerActivity.class)), 0);
+                v -> startActivity(new Intent(this, LogViewerActivity.class)), dp8);
+        addButton(actionsCard, "Fix Battery Settings (stops silent misses)",
+                v -> openBatterySettings(), dp8);
+        addButton(actionsCard, "Fix Location Permission (needs \"Allow all the time\")",
+                v -> openLocationPermissionSettings(), 0);
 
         page.addView(actionsCard);
 
@@ -242,6 +248,31 @@ public class MainActivity extends Activity {
     private boolean isIgnoringBatteryOptimizations() {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         return pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    private void openBatterySettings() {
+        try {
+            if (isIgnoringBatteryOptimizations()) {
+                startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+            } else {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not open battery settings - set manually in phone Settings > Battery", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void openLocationPermissionSettings() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.fromParts("package", getPackageName(), null));
+            startActivity(intent);
+            Toast.makeText(this, "Open Permissions > Location > Allow all the time", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not open app settings", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void createNotificationChannel() {
