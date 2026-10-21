@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="keka_purple">#5746AF</color>
+    <color name="keka_purple_dark">#3A2E7A</color>
+    <color name="bg_dark">#0F1115</color>
+    <color name="card_bg">#1C1F26</color>
+    <color name="text_primary">#E2E8EB</color>
+    <color name="text_secondary">#8DB1BF</color>
+    <color name="status_ok">#4CAF50</color>
+    <color name="status_warn">#F44336</color>
+</resources>

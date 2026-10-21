@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/keka_purple</item>
+        <item name="colorPrimaryDark">@color/keka_purple_dark</item>
+        <item name="colorAccent">@color/keka_purple</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+    </style>
+</resources>

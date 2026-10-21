@@ -6,10 +6,15 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
-import android.widget.Button;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -17,6 +22,8 @@ import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
+import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,51 +45,78 @@ public class MainActivity extends Activity {
         settings = new SettingsStore(this);
         eventLog = new EventLog(this);
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(40, 60, 40, 40);
+        int dp8 = dp(8), dp16 = dp(16), dp24 = dp(24);
+
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp16, dp24, dp16, dp24);
 
         TextView title = new TextView(this);
-        title.setTextSize(20);
         title.setText("Keka Auto Clock");
-        layout.addView(title);
+        title.setTextSize(24);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        title.setPadding(0, 0, 0, dp16);
+        page.addView(title);
+
+        // --- Status card ---
+        LinearLayout statusCard = new LinearLayout(this);
+        statusCard.setOrientation(LinearLayout.VERTICAL);
+        statusCard.setBackgroundResource(R.drawable.card_background);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusParams.bottomMargin = dp16;
+        statusCard.setLayoutParams(statusParams);
 
         statusText = new TextView(this);
         statusText.setTextSize(14);
-        statusText.setPadding(0, 20, 0, 20);
-        layout.addView(statusText);
+        statusText.setLineSpacing(dp(4), 1f);
+        statusCard.addView(statusText);
+        page.addView(statusCard);
 
-        Button loginButton = new Button(this);
-        loginButton.setText("Login to Keka");
-        loginButton.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
-        layout.addView(loginButton);
+        // --- Action buttons card ---
+        LinearLayout actionsCard = new LinearLayout(this);
+        actionsCard.setOrientation(LinearLayout.VERTICAL);
+        actionsCard.setBackgroundResource(R.drawable.card_background);
 
-        Button testInButton = new Button(this);
-        testInButton.setText("Test Clock-In Now");
-        testInButton.setOnClickListener(v -> runManualTest("in"));
-        layout.addView(testInButton);
+        addButton(actionsCard, "Login to Keka",
+                v -> startActivity(new Intent(this, LoginActivity.class)), dp8);
+        addButton(actionsCard, "Test Clock-In Now",
+                v -> runManualTest("in"), dp8);
+        addButton(actionsCard, "Test Clock-Out Now",
+                v -> runManualTest("out"), dp8);
+        addButton(actionsCard, "Settings",
+                v -> startActivity(new Intent(this, SettingsActivity.class)), dp8);
+        addButton(actionsCard, "View Event Log",
+                v -> startActivity(new Intent(this, LogViewerActivity.class)), 0);
 
-        Button testOutButton = new Button(this);
-        testOutButton.setText("Test Clock-Out Now");
-        testOutButton.setOnClickListener(v -> runManualTest("out"));
-        layout.addView(testOutButton);
-
-        Button settingsButton = new Button(this);
-        settingsButton.setText("Settings (location, times)");
-        settingsButton.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
-        layout.addView(settingsButton);
-
-        Button logButton = new Button(this);
-        logButton.setText("View Event Log");
-        logButton.setOnClickListener(v -> startActivity(new Intent(this, LogViewerActivity.class)));
-        layout.addView(logButton);
+        page.addView(actionsCard);
 
         ScrollView scrollView = new ScrollView(this);
-        scrollView.addView(layout);
+        scrollView.setBackgroundColor(ContextCompat.getColor(this, R.color.bg_dark));
+        scrollView.addView(page);
         setContentView(scrollView);
 
         createNotificationChannel();
         requestPermissionsThenRegisterGeofences();
+    }
+
+    private void addButton(LinearLayout parent, String text, android.view.View.OnClickListener listener, int bottomMarginPx) {
+        MaterialButton button = new MaterialButton(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setCornerRadius(dp(12));
+        button.setOnClickListener(listener);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = bottomMarginPx;
+        button.setLayoutParams(params);
+        parent.addView(button);
+    }
+
+    private int dp(int value) {
+        float density = getResources().getDisplayMetrics().density;
+        return Math.round(value * density);
     }
 
     @Override
@@ -100,8 +134,6 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
-        StringBuilder sb = new StringBuilder();
-
         boolean locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
         boolean backgroundLocationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
@@ -112,31 +144,55 @@ public class MainActivity extends Activity {
                 == PackageManager.PERMISSION_GRANTED;
         boolean batteryUnrestricted = isIgnoringBatteryOptimizations();
 
-        sb.append("PERMISSIONS\n");
-        sb.append(dot(locationGranted)).append(" Location access\n");
-        sb.append(dot(backgroundLocationGranted)).append(" Background location (\"Allow all the time\")\n");
-        sb.append(dot(notificationsGranted)).append(" Notifications\n");
-        sb.append(dot(batteryUnrestricted)).append(" Battery unrestricted");
-        if (!batteryUnrestricted) {
-            sb.append(" <- set this in phone Settings > Battery, or trigger will stop silently");
-        }
-        sb.append("\n\n");
+        SpannableStringBuilder sb = new SpannableStringBuilder();
+        appendHeading(sb, "PERMISSIONS");
+        appendStatusLine(sb, locationGranted, "Location access");
+        appendStatusLine(sb, backgroundLocationGranted, "Background location (\"Allow all the time\")");
+        appendStatusLine(sb, notificationsGranted, "Notifications");
+        appendStatusLine(sb, batteryUnrestricted, "Battery unrestricted"
+                + (batteryUnrestricted ? "" : " - set in phone Settings > Battery, or trigger stops silently"));
 
-        sb.append("GEOFENCE\n");
-        sb.append(dot(settings.isGeofenceArmed())).append(" Armed\n");
-        sb.append(String.format("Lat %.6f, Lng %.6f, radius %.0fm\n",
+        sb.append("\n");
+        appendHeading(sb, "GEOFENCE");
+        appendStatusLine(sb, settings.isGeofenceArmed(), "Armed");
+        appendPlainLine(sb, String.format("Lat %.6f, Lng %.6f, radius %.0fm",
                 settings.getLat(), settings.getLng(), settings.getRadius()));
-        sb.append(String.format("Clock-out window: %02d:00 - %02d:00\n\n",
+        appendPlainLine(sb, String.format("Clock-out window: %02d:00 - %02d:00",
                 settings.getClockoutStartHour(), settings.getClockoutEndHour()));
 
-        sb.append("LAST EVENT\n");
-        sb.append(settings.getLastEvent());
+        sb.append("\n");
+        appendHeading(sb, "LAST EVENT");
+        appendPlainLine(sb, settings.getLastEvent());
 
-        statusText.setText(sb.toString());
+        statusText.setText(sb);
     }
 
-    private String dot(boolean ok) {
-        return ok ? "[OK]" : "[!!]";
+    private void appendHeading(SpannableStringBuilder sb, String text) {
+        int start = sb.length();
+        sb.append(text).append("\n");
+        sb.setSpan(new StyleSpan(Typeface.BOLD), start, start + text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(this, R.color.text_secondary)),
+                start, start + text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    private void appendStatusLine(SpannableStringBuilder sb, boolean ok, String label) {
+        int dotStart = sb.length();
+        String dot = ok ? "\u25CF " : "\u25CF "; // filled circle, colored below
+        sb.append(dot);
+        sb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(this, ok ? R.color.status_ok : R.color.status_warn)),
+                dotStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        int textStart = sb.length();
+        sb.append(label).append("\n");
+        sb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(this, R.color.text_primary)),
+                textStart, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    private void appendPlainLine(SpannableStringBuilder sb, String text) {
+        int start = sb.length();
+        sb.append(text).append("\n");
+        sb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(this, R.color.text_primary)),
+                start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 
     private boolean isIgnoringBatteryOptimizations() {
