@@ -2,6 +2,7 @@ package com.hemanth.kekaautoclock;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
@@ -21,11 +22,24 @@ public class LoginActivity extends Activity {
         webView = new WebView(this);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
+
+        // Keka's login flow redirects across domains (app.keka.com -> houseofbluebeans.keka.com
+        // via OAuth). Without explicitly accepting third-party cookies, the session set during
+        // that redirect chain may not persist into OTHER WebView instances (like the invisible
+        // one used for the real background clock-in/out trigger).
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if (url != null && url.contains("attendance/logs")) {
+                    // Force cookies to disk NOW rather than waiting for Android's normal
+                    // persistence timing - the background trigger may run in a fresh process
+                    // before that would have happened naturally.
+                    cookieManager.flush();
                     Toast.makeText(LoginActivity.this,
                             "Logged in - you can close this screen now",
                             Toast.LENGTH_LONG).show();

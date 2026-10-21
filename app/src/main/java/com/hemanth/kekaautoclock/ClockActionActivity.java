@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -39,6 +40,10 @@ public class ClockActionActivity extends Activity {
         webView.getSettings().setDomStorageEnabled(true); // needed to keep the login session
         webView.addJavascriptInterface(new JsBridge(finalMode), "AndroidBridge");
 
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -46,7 +51,8 @@ public class ClockActionActivity extends Activity {
                 // Give the Angular SPA a moment to mount the attendance button,
                 // then run the click script and report the result back via JsBridge.
                 new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    String wrapped = "window.AndroidBridge.onResult((" + SettingsStore.clickScript(finalMode) + "))";
+                    String wrapped = "window.AndroidBridge.onResult((" + SettingsStore.clickScript(finalMode)
+                            + "), document.title, '" + url.replace("'", "") + "')";
                     view.evaluateJavascript(wrapped, null);
                 }, 3000);
             }
@@ -71,10 +77,16 @@ public class ClockActionActivity extends Activity {
         JsBridge(String mode) { this.mode = mode; }
 
         @JavascriptInterface
-        public void onResult(String result) {
+        public void onResult(String result, String pageTitle, String pageUrl) {
             runOnUiThread(() -> {
                 String label = mode.equals("in") ? "Clock-in" : "Clock-out";
                 String msg = label + ": " + result;
+                if ("no-container".equals(result)) {
+                    // self-diagnosing: tells us WHICH page we actually landed on
+                    // (e.g. "Log in" means the session didn't carry over - a cookie problem,
+                    // not a click-logic problem)
+                    msg += " (page title='" + pageTitle + "', url=" + pageUrl + ")";
+                }
                 showNotification(msg);
                 eventLog.log(msg);
                 settings.setLastEvent(msg);
