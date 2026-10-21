@@ -59,9 +59,8 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
     }
 
     private void launchClockAction(Context context, String mode) {
-        Intent actionIntent = new Intent(context, ClockActionActivity.class);
-        actionIntent.putExtra(ClockActionActivity.EXTRA_MODE, mode);
-        actionIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        context.startActivity(actionIntent);
+        Intent serviceIntent = new Intent(context, ClockActionService.class);
+        serviceIntent.putExtra(ClockActionService.EXTRA_MODE, mode);
+        androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
     }
 }

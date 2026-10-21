@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
@@ -38,19 +38,18 @@
             android:name=".LogViewerActivity"
             android:exported="false" />
 
-        <!-- Invisible activity that hosts the WebView and runs the click script.
-             Translucent + no history so it never shows a visible UI to the user,
-             just flashes through to run the JS and finish. -->
-        <activity
-            android:name=".ClockActionActivity"
+        <!-- Runs the actual clock-in/out click script. A foreground Service, not an
+             Activity: Android 10+ blocks starting Activities from the background
+             (from a BroadcastReceiver or WorkManager Worker, both of which trigger
+             this), so an Activity here could silently never launch. -->
+        <service
+            android:name=".ClockActionService"
             android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:excludeFromRecents="true"
-            android:noHistory="true" />
+            android:foregroundServiceType="dataSync" />
 
         <receiver
             android:name=".GeofenceBroadcastReceiver"
-            android:exported="true" />
+            android:exported="false" />
 
         <receiver
             android:name=".BootReceiver"

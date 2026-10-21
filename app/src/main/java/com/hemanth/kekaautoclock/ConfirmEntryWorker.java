@@ -84,9 +84,8 @@ public class ConfirmEntryWorker extends Worker {
     }
 
     private void launchClockIn(Context context) {
-        Intent intent = new Intent(context, ClockActionActivity.class);
-        intent.putExtra(ClockActionActivity.EXTRA_MODE, "in");
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        context.startActivity(intent);
+        Intent intent = new Intent(context, ClockActionService.class);
+        intent.putExtra(ClockActionService.EXTRA_MODE, "in");
+        androidx.core.content.ContextCompat.startForegroundService(context, intent);
     }
 }

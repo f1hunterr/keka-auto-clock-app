@@ -136,9 +136,9 @@ public class MainActivity extends Activity {
 
     private void runManualTest(String mode) {
         eventLog.log("Manual test triggered: " + mode);
-        Intent intent = new Intent(this, ClockActionActivity.class);
-        intent.putExtra(ClockActionActivity.EXTRA_MODE, mode);
-        startActivity(intent);
+        Intent intent = new Intent(this, ClockActionService.class);
+        intent.putExtra(ClockActionService.EXTRA_MODE, mode);
+        androidx.core.content.ContextCompat.startForegroundService(this, intent);
         Toast.makeText(this, "Running test " + mode + " - watch for the notification", Toast.LENGTH_SHORT).show();
     }
 
