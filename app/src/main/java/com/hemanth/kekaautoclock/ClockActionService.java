@@ -41,6 +41,7 @@ public class ClockActionService extends Service {
     private String mode = "in";
     private int retriesLeft = MAX_RETRIES;
     private boolean finished = false;
+    private boolean busy = false;
 
     @Nullable
     @Override
@@ -50,8 +51,22 @@ public class ClockActionService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        mode = (intent != null && intent.getStringExtra(EXTRA_MODE) != null)
+        String requestedMode = (intent != null && intent.getStringExtra(EXTRA_MODE) != null)
                 ? intent.getStringExtra(EXTRA_MODE) : "in";
+
+        // This Service is a single shared instance across calls - if a second trigger
+        // arrives while the first is still running (confirmed via real-device testing:
+        // a manual test overlapped with a queued confirm-delay firing and the result
+        // came back as the WRONG mode because the shared 'mode' field got overwritten
+        // mid-flight), ignore the new one instead of corrupting the in-progress request.
+        // A genuine wrong clock-in/out is worse than a skipped duplicate trigger.
+        if (busy) {
+            new EventLog(this).log("ClockActionService busy (mode=" + mode
+                    + " in progress) - ignoring overlapping request for mode=" + requestedMode);
+            return START_NOT_STICKY;
+        }
+        busy = true;
+        mode = requestedMode;
 
         eventLog = new EventLog(this);
         settings = new SettingsStore(this);
@@ -131,6 +146,7 @@ public class ClockActionService extends Service {
     private void finishWithResult(String detail) {
         if (finished) return;
         finished = true;
+        busy = false;
         String label = mode.equals("in") ? "Clock-in" : "Clock-out";
         String msg = label + ": " + detail;
         eventLog.log(msg);
