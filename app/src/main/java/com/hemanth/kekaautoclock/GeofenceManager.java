@@ -41,7 +41,7 @@ public class GeofenceManager {
                 .setCircularRegion(settings.getLat(), settings.getLng(), settings.getRadius())
                 .setExpirationDuration(Geofence.NEVER_EXPIRE)
                 .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
-                .setLoiteringDelay(30000)
+                .setNotificationResponsiveness(60000) // ask Play Services to report within ~1 min, not its default multi-minute batching
                 .build();
 
         GeofencingRequest request = new GeofencingRequest.Builder()
