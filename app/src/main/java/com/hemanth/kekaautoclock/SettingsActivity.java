@@ -1,7 +1,9 @@
 package com.hemanth.kekaautoclock;
 
 import android.app.Activity;
+import android.app.TimePickerDialog;
 import android.os.Bundle;
+import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -14,11 +16,19 @@ import com.google.android.material.button.MaterialButton;
 
 public class SettingsActivity extends Activity {
 
+    private int clockoutStartHour;
+    private int clockoutEndHour;
+    private MaterialButton startTimeButton;
+    private MaterialButton endTimeButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         SettingsStore settings = new SettingsStore(this);
+        clockoutStartHour = settings.getClockoutStartHour();
+        clockoutEndHour = settings.getClockoutEndHour() % 24; // 24 displays as 12:00 AM (midnight)
+
         int dp16 = dp(16), dp24 = dp(24);
 
         LinearLayout layout = new LinearLayout(this);
@@ -29,14 +39,28 @@ public class SettingsActivity extends Activity {
         EditText latField = labeledField(layout, "Office latitude", String.valueOf(settings.getLat()));
         EditText lngField = labeledField(layout, "Office longitude", String.valueOf(settings.getLng()));
         EditText radiusField = labeledField(layout, "Radius (meters)", String.valueOf(settings.getRadius()));
-        EditText startField = labeledField(layout, "Clock-out window start hour (0-23)", String.valueOf(settings.getClockoutStartHour()));
-        EditText endField = labeledField(layout, "Clock-out window end hour (0-24)", String.valueOf(settings.getClockoutEndHour()));
+
+        TextView startLabel = new TextView(this);
+        startLabel.setText("Clock-out window starts at");
+        startLabel.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
+        startLabel.setPadding(0, dp(16), 0, dp(4));
+        layout.addView(startLabel);
+
+        startTimeButton = timePickerButton(layout, clockoutStartHour, hour -> clockoutStartHour = hour);
+
+        TextView endLabel = new TextView(this);
+        endLabel.setText("Clock-out window ends at");
+        endLabel.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
+        endLabel.setPadding(0, dp(16), 0, dp(4));
+        layout.addView(endLabel);
+
+        endTimeButton = timePickerButton(layout, clockoutEndHour, hour -> clockoutEndHour = hour);
 
         TextView note = new TextView(this);
         note.setTextColor(ContextCompat.getColor(this, R.color.text_secondary));
         note.setPadding(0, dp(16), 0, dp(16));
-        note.setText("Clock-out only fires if you leave the geofence with the current hour "
-                + "inside [start, end). Example: 18 to 24 means 6:00 PM through 11:59 PM.");
+        note.setText("Clock-out only fires if you leave the geofence with the current time "
+                + "inside this window. E.g. 6:00 PM to 12:00 AM covers the whole evening.");
         layout.addView(note);
 
         MaterialButton saveButton = new MaterialButton(this);
@@ -48,11 +72,14 @@ public class SettingsActivity extends Activity {
                 double lat = Double.parseDouble(latField.getText().toString().trim());
                 double lng = Double.parseDouble(lngField.getText().toString().trim());
                 float radius = Float.parseFloat(radiusField.getText().toString().trim());
-                int start = Integer.parseInt(startField.getText().toString().trim());
-                int end = Integer.parseInt(endField.getText().toString().trim());
 
-                if (start < 0 || start > 23 || end < 0 || end > 24 || end <= start) {
-                    Toast.makeText(this, "Invalid clock-out window", Toast.LENGTH_LONG).show();
+                // Internal storage stays 0-23 for start, 1-24 for end (24 = midnight/end of day),
+                // matching the existing hour-of-day comparison logic in GeofenceBroadcastReceiver.
+                int end = (clockoutEndHour == 0) ? 24 : clockoutEndHour;
+                int start = clockoutStartHour;
+
+                if (end <= start) {
+                    Toast.makeText(this, "End time must be after start time (use 12:00 AM for midnight)", Toast.LENGTH_LONG).show();
                     return;
                 }
 
@@ -64,7 +91,7 @@ public class SettingsActivity extends Activity {
                         Toast.makeText(this, "Geofence re-armed with new settings", Toast.LENGTH_SHORT).show());
 
             } catch (NumberFormatException e) {
-                Toast.makeText(this, "Enter valid numbers in all fields", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Enter valid numbers in location fields", Toast.LENGTH_LONG).show();
             }
         });
         layout.addView(saveButton);
@@ -75,6 +102,27 @@ public class SettingsActivity extends Activity {
         scrollView.addView(layout);
         setContentView(scrollView);
         setTitle("Keka Auto Clock - Settings");
+    }
+
+    private interface HourPicked {
+        void onPicked(int hourOfDay);
+    }
+
+    private MaterialButton timePickerButton(LinearLayout parent, int initialHour, HourPicked callback) {
+        MaterialButton button = new MaterialButton(this, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        button.setText(TimeUtils.formatHour12(initialHour));
+        button.setAllCaps(false);
+        button.setCornerRadius(dp(12));
+        button.setOnClickListener(v -> new TimePickerDialog(this, (view, hourOfDay, minute) -> {
+            callback.onPicked(hourOfDay);
+            button.setText(TimeUtils.formatHour12(hourOfDay));
+        }, initialHour, 0, false).show()); // false = 12-hour display with AM/PM
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        button.setLayoutParams(params);
+        parent.addView(button);
+        return button;
     }
 
     private int dp(int value) {

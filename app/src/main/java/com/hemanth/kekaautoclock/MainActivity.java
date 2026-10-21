@@ -134,6 +134,36 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
+        renderStatus();
+        fetchCurrentLocation();
+    }
+
+    private Double currentDistanceMeters = null;
+    private Boolean currentlyInsideGeofence = null;
+
+    private void fetchCurrentLocation() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        com.google.android.gms.location.FusedLocationProviderClient client =
+                com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
+        try {
+            client.getLastLocation().addOnSuccessListener(location -> {
+                if (location == null) return;
+                android.location.Location office = new android.location.Location("office");
+                office.setLatitude(settings.getLat());
+                office.setLongitude(settings.getLng());
+                currentDistanceMeters = (double) location.distanceTo(office);
+                currentlyInsideGeofence = currentDistanceMeters <= settings.getRadius();
+                renderStatus();
+            });
+        } catch (SecurityException ignored) {
+            // permission was revoked between the check above and the call - just skip this refresh
+        }
+    }
+
+    private void renderStatus() {
         boolean locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
         boolean backgroundLocationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
@@ -153,12 +183,26 @@ public class MainActivity extends Activity {
                 + (batteryUnrestricted ? "" : " - set in phone Settings > Battery, or trigger stops silently"));
 
         sb.append("\n");
+        appendHeading(sb, "LOCATION");
+        if (!locationGranted) {
+            appendPlainLine(sb, "Unknown - location permission not granted");
+        } else if (currentlyInsideGeofence == null) {
+            appendPlainLine(sb, "Checking...");
+        } else {
+            appendStatusLine(sb, currentlyInsideGeofence,
+                    currentlyInsideGeofence ? "You are IN the office area" : "You are OUTSIDE the office area");
+            appendPlainLine(sb, String.format("Distance from office: %.0fm (radius %.0fm)",
+                    currentDistanceMeters, settings.getRadius()));
+        }
+
+        sb.append("\n");
         appendHeading(sb, "GEOFENCE");
         appendStatusLine(sb, settings.isGeofenceArmed(), "Armed");
         appendPlainLine(sb, String.format("Lat %.6f, Lng %.6f, radius %.0fm",
                 settings.getLat(), settings.getLng(), settings.getRadius()));
-        appendPlainLine(sb, String.format("Clock-out window: %02d:00 - %02d:00",
-                settings.getClockoutStartHour(), settings.getClockoutEndHour()));
+        int endHour = settings.getClockoutEndHour();
+        appendPlainLine(sb, String.format("Clock-out window: %s - %s",
+                TimeUtils.formatHour12(settings.getClockoutStartHour()), TimeUtils.formatHour12(endHour % 24)));
 
         sb.append("\n");
         appendHeading(sb, "LAST EVENT");
