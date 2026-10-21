@@ -11,6 +11,9 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -37,15 +40,26 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40, 80, 40, 40);
+
         TextView tv = new TextView(this);
-        tv.setPadding(40, 80, 40, 40);
         tv.setTextSize(16);
         tv.setText("Keka Auto Clock\n\n"
                 + "Geofence armed around the office.\n"
                 + "Clock-in fires on arrival (any time).\n"
                 + "Clock-out fires on departure, 18:00-23:59 only.\n\n"
-                + "You can close this screen — it runs in the background.");
-        setContentView(tv);
+                + "First time setup: tap below and log into Keka once.\n"
+                + "After that you can close this screen — it runs in the background.");
+        layout.addView(tv);
+
+        Button loginButton = new Button(this);
+        loginButton.setText("Login to Keka");
+        loginButton.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
+        layout.addView(loginButton);
+
+        setContentView(layout);
 
         createNotificationChannel();
         requestPermissionsThenRegisterGeofences();
