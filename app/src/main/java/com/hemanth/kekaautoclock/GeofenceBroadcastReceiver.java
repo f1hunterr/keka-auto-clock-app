@@ -19,6 +19,7 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
 
     private static final String TAG = "KekaAutoClock";
     private static final int CONFIRM_DELAY_SECONDS = 60;
+    private static final long DEBOUNCE_MS = 3 * 60 * 1000; // 3 minutes
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -35,6 +36,17 @@ public class GeofenceBroadcastReceiver extends BroadcastReceiver {
         int transition = event.getGeofenceTransition();
         SettingsStore settings = new SettingsStore(context);
 
+        // Debounce GPS boundary-flapping, confirmed via real-device logs: 5 separate
+        // ENTER events fired in 18 minutes while stationary near the office boundary,
+        // each spawning its own confirm-worker + WebView session for no real reason.
+        long debounceNow = System.currentTimeMillis();
+        long sinceLast = debounceNow - settings.getLastTriggerMillis();
+        if (sinceLast < DEBOUNCE_MS) {
+            eventLog.log("Geofence transition debounced (" + (sinceLast / 1000)
+                    + "s since last trigger, cooldown " + (DEBOUNCE_MS / 1000) + "s) - ignored");
+            return;
+        }
+        settings.setLastTriggerMillis(debounceNow);
         if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) {
             Log.i(TAG, "Entered office geofence -> confirming in " + CONFIRM_DELAY_SECONDS + "s before clock-in");
             eventLog.log("Geofence ENTER -> waiting " + CONFIRM_DELAY_SECONDS

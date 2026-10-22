@@ -42,6 +42,7 @@ public class ClockActionService extends Service {
     private int retriesLeft = MAX_RETRIES;
     private boolean finished = false;
     private boolean busy = false;
+    private boolean scriptEvaluated = false;
 
     @Nullable
     @Override
@@ -108,6 +109,13 @@ public class ClockActionService extends Service {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if (finished) return;
+                // Guard against onPageFinished firing more than once for the SAME
+                // navigation (a real, confirmed-via-production-log WebView quirk with
+                // SPAs - saw the click script run 2-3 times for one trigger, resulting
+                // in duplicate 'done' log entries). Only inject once per page load;
+                // reset when we deliberately reload for a retry.
+                if (scriptEvaluated) return;
+                scriptEvaluated = true;
                 // The script self-polls for up to 15s and calls AndroidBridge.onResult()
                 // itself once it resolves - no fixed Java-side delay needed anymore.
                 view.evaluateJavascript(SettingsStore.clickScript(mode), null);
@@ -129,7 +137,10 @@ public class ClockActionService extends Service {
                             + " - retrying in " + (RETRY_DELAY_MS / 1000) + "s (" + retriesLeft + " left)";
                     eventLog.log(retryMsg);
                     new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        if (!finished) webView.loadUrl(SettingsStore.KEKA_URL);
+                        if (!finished) {
+                            scriptEvaluated = false;
+                            webView.loadUrl(SettingsStore.KEKA_URL);
+                        }
                     }, RETRY_DELAY_MS);
                     return;
                 }

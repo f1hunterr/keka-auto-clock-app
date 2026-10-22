@@ -64,6 +64,14 @@ public final class SettingsStore {
         prefs.edit().putString(KEY_LAST_EVENT, description).apply();
     }
 
+    private static final String KEY_LAST_TRIGGER_MILLIS = "last_trigger_millis";
+
+    /** Debounce guard for GPS boundary-flapping, confirmed via real-device logs:
+     *  5 separate ENTER events fired in 18 minutes while stationary near the office
+     *  boundary, each spawning its own confirm-worker + WebView session for no reason. */
+    public long getLastTriggerMillis() { return prefs.getLong(KEY_LAST_TRIGGER_MILLIS, 0); }
+    public void setLastTriggerMillis(long millis) { prefs.edit().putLong(KEY_LAST_TRIGGER_MILLIS, millis).apply(); }
+
     public static String clickScript(String mode) {
         String text = mode.equals("in") ? "clock-in" : "clock-out";
         // Keka renders these two states with DIFFERENT element types AND
