@@ -29,11 +29,12 @@ public class ClockActionService extends Service {
     public static final String EXTRA_MODE = "mode"; // "in" or "out"
     private static final String CHANNEL_ID = "keka_auto_clock";
     private static final int FOREGROUND_NOTIFICATION_ID = 9001;
-    private static final int MAX_RETRIES = 1; // the click script itself polls for up to 15s now,
-                                                // so a full page-reload retry is just an outer
-                                                // safety net for a genuinely broken/stalled load
+    private static final int MAX_RETRIES = 2; // bumped from 1: 'clicked-not-confirmed' is now a
+                                                // real, meaningful failure signal (click fired but
+                                                // Keka's state didn't change) worth retrying harder
     private static final long RETRY_DELAY_MS = 3000;
-    private static final long SAFETY_TIMEOUT_MS = 60000;
+    private static final long SAFETY_TIMEOUT_MS = 80000; // accounts for the added 2.5s post-click
+                                                           // verification wait per attempt
 
     private WebView webView;
     private EventLog eventLog;
@@ -130,7 +131,8 @@ public class ClockActionService extends Service {
         public void onResult(String result, String pageTitle, String pageUrl) {
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (finished) return;
-                boolean isFailure = result.startsWith("no-container") || result.startsWith("no-op");
+                boolean isFailure = result.startsWith("no-container") || result.startsWith("no-op")
+                        || result.startsWith("clicked-not-confirmed");
                 if (isFailure && retriesLeft > 0) {
                     retriesLeft--;
                     String retryMsg = (mode.equals("in") ? "Clock-in" : "Clock-out") + ": " + result

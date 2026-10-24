@@ -10,8 +10,8 @@ android {
         applicationId = "com.hemanth.kekaautoclock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "2.11"
+        versionCode = 12
+        versionName = "2.12"
     }
 
     buildTypes {

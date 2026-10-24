@@ -86,23 +86,43 @@ public final class SettingsStore {
         // wastes time or isn't long enough. This polls every 500ms for up to 15s
         // and resolves (via the JS bridge directly) the instant it's ready,
         // instead of Java guessing a delay and reloading the whole page to retry.
+        //
+        // POST-CLICK VERIFICATION: a bare .click() reported 'done' in production
+        // even on days the real Keka attendance record came up missing the
+        // clock-out - the click fired but we never confirmed Keka's backend
+        // actually accepted it. Now waits 2.5s after clicking and re-checks that
+        // the SAME action button disappeared (i.e. the page re-rendered to the
+        // other state) before declaring success; if it's still there, treats it
+        // as a real failure worth retrying instead of a false 'done'.
         return "(function() { "
                 + "const text = '" + text + "'; "
-                + "const tryIn = (root) => { "
+                + "const findMatch = (root) => { "
                 + "  const els = root.querySelectorAll('button, a'); "
                 + "  for (const el of els) { "
                 + "    const t = (el.innerText || '').toLowerCase(); "
-                + "    if (t.includes(text)) { el.click(); return true; } "
+                + "    if (t.includes(text)) return el; "
                 + "  } "
-                + "  return false; "
+                + "  return null; "
                 + "}; "
                 + "let attempts = 0; "
                 + "const maxAttempts = 30; " // 30 * 500ms = 15s poll window
                 + "const poll = () => { "
                 + "  attempts++; "
                 + "  const c = document.querySelector('employee-attendance-request-actions'); "
-                + "  if (c && tryIn(c)) { window.AndroidBridge.onResult('done', document.title, location.href); return; } "
-                + "  if (tryIn(document.body)) { window.AndroidBridge.onResult('done (fallback search)', document.title, location.href); return; } "
+                + "  const scope = c ? c : document.body; "
+                + "  const el = findMatch(scope); "
+                + "  if (el) { "
+                + "    el.click(); "
+                + "    setTimeout(() => { "
+                + "      const stillPresent = !!findMatch(document.querySelector('employee-attendance-request-actions') || document.body); "
+                + "      if (stillPresent) { "
+                + "        window.AndroidBridge.onResult('clicked-not-confirmed [button still present 2.5s after click]', document.title, location.href); "
+                + "      } else { "
+                + "        window.AndroidBridge.onResult(c ? 'done' : 'done (fallback search)', document.title, location.href); "
+                + "      } "
+                + "    }, 2500); "
+                + "    return; "
+                + "  } "
                 + "  if (attempts >= maxAttempts) { "
                 + "    const shadowCount = Array.from(document.querySelectorAll('*')).filter(el => el.shadowRoot).length; "
                 + "    const sample = c ? Array.from(c.querySelectorAll('button, a')).map(el => (el.tagName + ':' + (el.innerText||'').trim()).slice(0,40)).join('|').slice(0,200) : 'n/a'; "
